@@ -1,11 +1,35 @@
 {
-  "name": "@rwatt451/ordercloud-react",
+  "name": "@ordercloud/react-sdk",
+  "homepage": "https://ordercloud.io/",
+  "bugs": {
+    "url": "https://github.com/ordercloud-api/ordercloud-react-sdk/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ordercloud-api/ordercloud-react-sdk"
+  },
+  "license": "MIT",
   "private": false,
   "version": "0.2.0",
   "type": "module",
   "files": [
     "package.json",
     "dist"
+  ],
+  "keywords": [
+    "sitecore",
+    "ordercloud",
+    "b2b",
+    "b2c",
+    "javascript",
+    "typescript",
+    "ecommerce",
+    "api",
+    "headless",
+    "sdk",
+    "react",
+    "ui",
+    "components"
   ],
   "main": "./dist/index.umd.cjs",
   "module": "./dist/index.js",
