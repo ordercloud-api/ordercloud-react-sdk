@@ -19,12 +19,18 @@ jobs:
         with:
           token: "${{ secrets.PERSONAL_ACCESS_TOKEN }}"
           fetch-depth: 0
+      - name: Get current version from package.json
+        id: get_current_version
+        run: |
+          PREVIOUS_VERSION=$(jq -r .version package.json)
+          echo "PREVIOUS_VERSION=$PREVIOUS_VERSION" >> $GITHUB_ENV
       - name: Create bump and changelog
         uses: commitizen-tools/commitizen-action@master
         with:
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           changelog_increment_filename: body.md
       - name: Create GH Release
+        if: env.REVISION != env.PREVIOUS_VERSION
         uses: softprops/action-gh-release@v1
         with:
           body_path: "body.md"
@@ -32,9 +38,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Authenticate with npm
+        if: env.REVISION != env.PREVIOUS_VERSION
         run: npm set //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
       - name: Publish to npm
+        if: env.REVISION != env.PREVIOUS_VERSION
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm publish --dry-run --access public
+          npm publish --access public
