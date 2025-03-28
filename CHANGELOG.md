@@ -1,3 +1,9 @@
+## 0.2.3 (2025-03-28)
+
+### Fix
+
+- **gh-actions**: bug fix that ensures build before publish
+
 ## 0.2.2 (2025-03-28)
 
 ### Fix
