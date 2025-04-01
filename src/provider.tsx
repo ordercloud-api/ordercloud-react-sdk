@@ -8,7 +8,6 @@ import {
 import {
   FC,
   PropsWithChildren,
-  ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -33,7 +32,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
   configurationOverrides,
   currencyDefaults = { currencyCode: "USD", language: "en-US" },
   defaultErrorHandler,
-}): ReactNode => {
+}) => {
   const ocConfig = useMemo(() => {
     const { cookieOptions, ...rest } = configurationOverrides || {};
     return {
