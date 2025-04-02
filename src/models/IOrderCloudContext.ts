@@ -40,8 +40,8 @@ export interface IOrderCloudContext {
 
   baseApiUrl: string;
   clientId: string;
-  scope: ApiRole[];
-  customScope: string[];
+  scope?: ApiRole[];
+  customScope?: string[];
   allowAnonymous: boolean;
   defaultErrorHandler?: (error:OrderCloudError, context:IOrderCloudErrorContext) => void;
   token?: string;

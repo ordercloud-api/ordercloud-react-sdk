@@ -17,8 +17,6 @@ const INITIAL_ORDERCLOUD_CONTEXT: IOrderCloudContext = {
   },
   baseApiUrl: "https://api.ordercloud.io/v1",
   clientId: "",
-  scope: [],
-  customScope: [],
   allowAnonymous: false,
   token: undefined,
   autoApplyPromotions: false,

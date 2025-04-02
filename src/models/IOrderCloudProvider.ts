@@ -5,8 +5,8 @@ import { OpenAPIV3 } from "openapi-types";
 export interface IOrderCloudProvider {
     baseApiUrl: string;
     clientId: string;
-    scope: ApiRole[];
-    customScope: string[];
+    scope?: ApiRole[];
+    customScope?: string[];
     allowAnonymous: boolean;
     xpSchemas?: OpenAPIV3.SchemaObject;
     autoApplyPromotions?: boolean,
