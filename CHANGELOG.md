@@ -1,3 +1,9 @@
+## 0.2.5 (2025-04-04)
+
+### Refactor
+
+- **provider**: `scope` and `customScope` are now optional for the OrderCloudProvider
+
 ## 0.2.4 (2025-04-01)
 
 ### Fix
