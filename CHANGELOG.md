@@ -1,3 +1,9 @@
+## 0.2.6 (2025-06-05)
+
+### Fix
+
+- **package.json**: update vulnerable packages to latest stable versions
+
 ## 0.2.5 (2025-04-04)
 
 ### Refactor
