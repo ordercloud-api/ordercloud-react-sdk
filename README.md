@@ -38,6 +38,43 @@ An **optional** [Open API specification](https://swagger.io/specification/) obje
 #### **defaultErrorHandler** `(error:OrderCloudError) => void`
 An **optional** callback function for globally handling OrderCloud errors in your application. Useful for wiring up toast-like feedback.
 
+#### **openIdConnect** `object`
+An **optional** object containing configuration for single-sign-on via [OpenID Connect](https://ordercloud.io/knowledge-base/sso-via-openid-connect).
+
+### **openIdConnect** `boolean`
+Set to `true` to activate single-sign-on via OpenIDConnect in your application. If `false`, all OIDC logic (such as login redirects and token handling) will be disabled, even if configs are defined.
+
+#### **openIdConnect.configs** `{id: string, roles?: string[], clientId: string}[]`
+An array of OpenID Connect configuration objects. Each defines the settings required to authenticate against a specific identity provider. At least one configuration must be provided.
+
+#### **openIdConnect.configs.[i].id** `string`
+The ID of the [OpenID connect configuration](https://ordercloud.io/api-reference/authentication-and-authorization/open-id-connects/create) that should be targeted for authentication
+
+#### **openIdConnect.configs.[i].roles** `string`
+An **optional** array of roles that will be requested when authenticating. If excluded, the token generated will contain any roles assigned to the user. Unless you have a specific reason for limiting roles, we recommend omitting this option.
+
+#### **openIdConnect.configs.[i].clientId** `string`
+An **optional** OrderCloud clientId to authenticate against. By default, will use `clientId` at the root of the provider settings.
+
+#### **openIdConnect.configs.[i].appStartPath** `string`
+An **optional** path to redirect the user to after returning from the identity provider. See [here](https://ordercloud.io/knowledge-base/sso-via-openid-connect#deep-linking) for more information
+
+#### **openIdConnect.configs.[i].customParams** `string`
+**optional** query parameters passed along to the `AuthorizationEndpoint`. See [here](https://ordercloud.io/knowledge-base/sso-via-openid-connect) for more information
+
+#### **openIdConnect.autoRedirect** `boolean`
+True will automatically redirect the user to the first openIdConnect config stored if the token is expired, or invalid. This is a simplified use case. For more control, or when you need to handle multiple identity providers set this to false and handle redirect on your own by calling `loginWithOpenIdConnect`
+
+### **openIdConnect.accessTokenQueryParamName** `string`
+Query parameter name where the OrderCloud access token is stored after login. For example, if [AppStartUrl](https://ordercloud.io/api-reference/authentication-and-authorization/open-id-connects/create) is `https://my-application.com/login?token={0}`, use `token`
+
+### **openIdConnect.refreshTokenQueryParamName**
+The **optional** query parameter name for the refresh token after login. Example: if [AppStartUrl](https://ordercloud.io/api-reference/authentication-and-authorization/open-id-connects/create) is `https://my-application.com/login?token={0}&refresh={3}`, use `refresh`
+
+
+### **openIdConnect.idpAccessTokenQueryParamName**
+The **optional** query parameter name for the identity provider access token after login. Example: if [AppStartUrl](https://ordercloud.io/api-reference/authentication-and-authorization/open-id-connects/create) is `https://my-application.com/login?token={0}&idptoken={1}`, use `idptoken`
+
 ## `useOrderCloudContext()` hook
 This hook returns the OrderCloud context that the OrderCloudProvider sets up based on your provided options. If anonymous authentication is allowed the OrderCloud context will automatically be in an authenticated state on first page load (shortly after the first React lifecycle).
 
@@ -52,6 +89,9 @@ When true, the currently active OrderCloud access token is a _registered_ user (
 
 #### **login**: `(username:string, password:string, rememberMe:boolean) => Promise<AccessToken>`
 An asyncrhonous callback method for building a login form for your application. When **rememberMe** is set to `true`, the `OrderCloudProvider` will attempt to store and use the `refresh_token` as long as it is valid. It is not necessary to do anything with the `AccessToken` response as this method will take care of managing the active token and authentication state for you.
+
+### **loginWithOpenIdConnect**: `(openIdConnectId: string, options?: { appStartPath?: string; customParams?: string; }) => void
+A method for manually redirecting a user to the identity provider login page defined by the openIdConnectId. To use this method you must define the relevent `openIdConnect` properties
 
 #### **logout**: `() => void`
 A callback for logging out a registered user from your application. This will also clear the Tanstack query client cache for OrderCloud API calls, forcing any actively used queries to refetch once anonymous auth takes over again or the user logs back in.
