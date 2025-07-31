@@ -18,6 +18,8 @@ import { IOrderCloudProvider } from "./models/IOrderCloudProvider";
 import { asyncStoragePersister, queryClient } from "./query";
 import { isAnonToken } from "./utils";
 import axios from "axios";
+import { IOpenIdConnectConfig } from "./models/IOpenIdConnectSettings";
+import { useOnceAtATime } from "./hooks/useOnceAtATime";
 
 let interceptorSetup = false;
 const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
@@ -27,6 +29,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
   scope,
   customScope,
   allowAnonymous,
+  openIdConnect,
   xpSchemas,
   autoApplyPromotions,
   configurationOverrides,
@@ -53,13 +56,31 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
   const [token, setToken] = useState<string | undefined>();
   const [authLoading, setAuthLoading] = useState(true);
 
+  if (openIdConnect?.enabled) {
+    if (
+      !openIdConnect ||
+      !openIdConnect.configs ||
+      openIdConnect.configs.length === 0
+    ) {
+      throw new Error(
+        "OpenID Connect is enabled, but no configurations were provided."
+      );
+    }
+
+    if (!openIdConnect.accessTokenQueryParamName) {
+      throw new Error(
+        "OpenID Connect is enabled, but accessTokenQueryParamName is missing."
+      );
+    }
+  }
+
   const handleLogout = useCallback(() => {
     queryClient.clear();
+    Tokens.RemoveAccessToken();
+    Tokens.RemoveRefreshToken();
     setIsAuthenticated(false);
     setIsLoggedIn(false);
     setToken(undefined);
-    Tokens.RemoveAccessToken();
-    Tokens.RemoveRefreshToken();
     setAuthLoading(false);
   }, []);
 
@@ -92,46 +113,174 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
     [clientId, scope, customScope]
   );
 
-  const verifyToken = useCallback(
-    async (accessToken?: string) => {
-      setAuthLoading(true);
-      if (accessToken) {
-        Tokens.SetAccessToken(accessToken);
-        Tokens.RemoveRefreshToken();
+  const handleLoginWithOpenIdConnect = useCallback(
+    (
+      openIdConnectId: string,
+      options?: {
+        appStartPath?: string;
+        customParams?: string;
       }
-      const token = await Tokens.GetValidToken();
+    ) => {
+      const config = openIdConnect?.configs.find(
+        (c) => c.id === openIdConnectId
+      );
+      if (!config) {
+        throw new Error(
+          `OpenID Connect configuration with id ${openIdConnectId} not found.`
+        );
+      }
+      handleOpenIdConnectRedirect(
+        config,
+        options?.appStartPath,
+        options?.customParams
+      );
+    },
+    []
+  );
 
-      if (token) {
-        const isAnon = isAnonToken(token);
-        if (isAnon && !allowAnonymous) {
-          handleLogout();
+  const handleOpenIdConnectAutoRedirect = useCallback(() => {
+    const config = openIdConnect?.configs[0] as IOpenIdConnectConfig
+    handleOpenIdConnectRedirect(config);
+  }, [openIdConnect]);
+
+  const handleOpenIdConnectRedirect = useCallback(
+    (
+      config: IOpenIdConnectConfig,
+      overrideAppStartPath?: string,
+      overrideCustomParams?: string
+    ) => {
+      const appRoles = [...(scope || []), ...(customScope || [])];
+      let redirectUrl =
+        `${baseApiUrl}/ocrplogin?id=${config.id}` +
+        `&cid=${config.clientId || clientId}`;
+
+      if (config.roles) {
+        redirectUrl += `&roles=${encodeURIComponent(config.roles.join(" "))}`;
+      } else if (appRoles.length > 0) {
+        redirectUrl += `&roles=${encodeURIComponent(appRoles.join(" "))}`;
+      }
+
+      if (overrideAppStartPath) {
+        redirectUrl += `&appstartpath=${encodeURIComponent(
+          overrideAppStartPath
+        )}`;
+      } else if (config.appStartPath) {
+        redirectUrl += `&appstartpath=${encodeURIComponent(
+          config.appStartPath
+        )}`;
+      } else if (openIdConnect?.appStartPath) {
+        redirectUrl += `&appstartpath=${encodeURIComponent(
+          openIdConnect.appStartPath
+        )}`;
+      }
+
+      if (overrideCustomParams) {
+        redirectUrl += `&customParams=${encodeURIComponent(
+          overrideCustomParams
+        )}`;
+      } else if (config.customParams) {
+        redirectUrl += `&customParams=${encodeURIComponent(
+          config.customParams
+        )}`;
+      } else if (openIdConnect?.customParams) {
+        redirectUrl += `&customParams=${encodeURIComponent(
+          openIdConnect.customParams
+        )}`;
+      }
+      window.location.assign(redirectUrl);
+    },
+    [openIdConnect, clientId, scope, customScope, baseApiUrl]
+  );
+
+  const { run: verifyToken } = useOnceAtATime(
+    useCallback(
+      async (accessToken?: string) => {
+        setAuthLoading(true);
+
+        if (openIdConnect?.enabled && openIdConnect.accessTokenQueryParamName) {
+          // User is being redirected to app after completing single-sign in flow
+          const urlParams = new URLSearchParams(window.location.search);
+          const accessTokenFromUrl = urlParams.get(
+            openIdConnect.accessTokenQueryParamName
+          );
+          const refreshTokenFromUrl = openIdConnect.refreshTokenQueryParamName
+            ? urlParams.get(openIdConnect.refreshTokenQueryParamName)
+            : null;
+          const idpAccessTokenFromUrl =
+            openIdConnect.idpAccessTokenQueryParamName
+              ? urlParams.get(openIdConnect.idpAccessTokenQueryParamName)
+              : null;
+
+          if (accessTokenFromUrl) {
+            Tokens.SetAccessToken(accessTokenFromUrl);
+            if (refreshTokenFromUrl)
+              Tokens.SetRefreshToken(refreshTokenFromUrl);
+            if (idpAccessTokenFromUrl)
+              Tokens.SetIdpAccessToken(idpAccessTokenFromUrl);
+
+            // Remove only token-related params
+            urlParams.delete(openIdConnect.accessTokenQueryParamName);
+            if (openIdConnect.refreshTokenQueryParamName)
+              urlParams.delete(openIdConnect.refreshTokenQueryParamName);
+            if (openIdConnect.idpAccessTokenQueryParamName)
+              urlParams.delete(openIdConnect.idpAccessTokenQueryParamName);
+
+            const url = new URL(window.location.href);
+            url.search = urlParams.toString();
+            window.history.replaceState({}, document.title, url.toString());
+
+            setToken(accessTokenFromUrl);
+            setIsAuthenticated(true);
+            setIsLoggedIn(true);
+            setAuthLoading(false);
+            return;
+          }
+        }
+
+        if (accessToken) {
+          Tokens.SetAccessToken(accessToken);
+          Tokens.RemoveRefreshToken();
+        }
+
+        const token = await Tokens.GetValidToken();
+
+        if (token) {
+          const isAnon = isAnonToken(token);
+          if (isAnon && !allowAnonymous) {
+            handleLogout();
+            return;
+          }
+
+          setIsAuthenticated(true);
+          setToken(token);
+          if (!isAnon) setIsLoggedIn(true);
+          setAuthLoading(false);
           return;
         }
+
+        if (openIdConnect?.enabled && openIdConnect?.autoRedirect) {
+          return handleOpenIdConnectAutoRedirect();
+        }
+
+        if (!allowAnonymous) {
+          setAuthLoading(false);
+          return;
+        }
+
+        const { access_token, refresh_token } = await Auth.Anonymous(
+          clientId,
+          scope,
+          customScope
+        );
+
+        Tokens.SetAccessToken(access_token);
+        Tokens.SetRefreshToken(refresh_token);
         setIsAuthenticated(true);
-        setToken(token);
-        if (!isAnon) setIsLoggedIn(true);
+        setIsLoggedIn(false);
         setAuthLoading(false);
-        return;
-      }
-
-      if (!allowAnonymous) {
-        setAuthLoading(false);
-        return;
-      }
-
-      const { access_token, refresh_token } = await Auth.Anonymous(
-        clientId,
-        scope,
-        customScope
-      );
-
-      Tokens.SetAccessToken(access_token);
-      Tokens.SetRefreshToken(refresh_token);
-      setIsAuthenticated(true);
-      setIsLoggedIn(false);
-      setAuthLoading(false);
-    },
-    [allowAnonymous, clientId, scope, customScope, handleLogout]
+      },
+      [allowAnonymous, clientId, scope, customScope, handleLogout]
+    )
   );
 
   const newAnonSession = useCallback(async () => {
@@ -176,7 +325,6 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
           return Promise.reject(error);
         }
       );
-    } else {
       interceptorSetup = true;
     }
 
@@ -209,6 +357,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
       currencyDefaults,
       logout: handleLogout,
       login: handleLogin,
+      loginWithOpenIdConnect: handleLoginWithOpenIdConnect,
       setToken: handleProvidedToken,
       defaultErrorHandler,
     };
@@ -228,6 +377,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
     currencyDefaults,
     handleLogout,
     handleLogin,
+    handleLoginWithOpenIdConnect,
     handleProvidedToken,
     defaultErrorHandler,
   ]);

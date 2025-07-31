@@ -1,6 +1,7 @@
 import { ApiRole, OrderCloudError, SdkConfiguration } from "ordercloud-javascript-sdk";
 import { IOrderCloudContext } from "./IOrderCloudContext";
 import { OpenAPIV3 } from "openapi-types";
+import { IOpenIdConnectSettings } from "./IOpenIdConnectSettings";
 
 export interface IOrderCloudProvider {
     baseApiUrl: string;
@@ -8,6 +9,7 @@ export interface IOrderCloudProvider {
     scope?: ApiRole[];
     customScope?: string[];
     allowAnonymous: boolean;
+    openIdConnect?: IOpenIdConnectSettings;
     xpSchemas?: OpenAPIV3.SchemaObject;
     autoApplyPromotions?: boolean,
     configurationOverrides?: Omit<SdkConfiguration, 'baseApiUrl' | 'clientID'>

@@ -1,4 +1,8 @@
-import { AccessToken, ApiRole, OrderCloudError } from "ordercloud-javascript-sdk";
+import {
+  AccessToken,
+  ApiRole,
+  OrderCloudError,
+} from "ordercloud-javascript-sdk";
 import { IOrderCloudErrorContext } from "./IOrderCloudErrorContext";
 import { OpenAPIV3 } from "openapi-types";
 
@@ -21,15 +25,29 @@ export interface IOrderCloudContext {
   /**
    * authenticates using the configured client ID and username / password
    */
-  login: (username:string, password:string, rememberMe?:boolean) => Promise<AccessToken>;
+  login: (
+    username: string,
+    password: string,
+    rememberMe?: boolean
+  ) => Promise<AccessToken>;
+  /**
+   * authenticates using the configured OpenID Connect settings
+   */
+  loginWithOpenIdConnect: (
+    openIdConnectId: string,
+    options?: {
+      appStartPath?: string;
+      customParams?: string;
+    }
+  ) => void;
   /**
    * authenticates using the provided OrderCloud access token
    */
-  setToken: (accessToken: string ) => void;
+  setToken: (accessToken: string) => void;
   /**
    * Signifies when authorization is in a loading state
    */
-  authLoading: boolean
+  authLoading: boolean;
 
   /**
    * If anonymous, this will retrieve a new anon token, useful for anonymous
@@ -43,9 +61,13 @@ export interface IOrderCloudContext {
   scope?: ApiRole[];
   customScope?: string[];
   allowAnonymous: boolean;
-  defaultErrorHandler?: (error:OrderCloudError, context:IOrderCloudErrorContext) => void;
+  defaultErrorHandler?: (
+    error: OrderCloudError,
+    context: IOrderCloudErrorContext
+  ) => void;
   token?: string;
+  idpToken?: string;
   xpSchemas?: OpenAPIV3.SchemaObject;
   autoApplyPromotions?: boolean;
-  currencyDefaults: { currencyCode: string, language: string }
+  currencyDefaults: { currencyCode: string; language: string };
 }
