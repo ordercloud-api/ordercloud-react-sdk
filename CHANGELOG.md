@@ -1,3 +1,9 @@
+## 0.3.0 (2025-08-04)
+
+### Feat
+
+- add support for single-sign-on via openid connect authentication
+
 ## 0.2.6 (2025-06-05)
 
 ### Fix
