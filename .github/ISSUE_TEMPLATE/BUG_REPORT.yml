@@ -1,0 +1,77 @@
+name: Bug Report
+description: Report reproducible behavior in the OrderCloud React SDK that does not match expectations.
+title: "[Bug]: "
+labels: ["bug"]
+type: "Bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report reproducible SDK defects. Do not include access tokens, credentials, or personal data.
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: Describe the observed behavior, error, or regression.
+      placeholder: Calling `useAuthQuery` with ... returns ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: Describe the result expected from documented or previous SDK behavior.
+      placeholder: The hook should ...
+    validations:
+      required: true
+  - type: input
+    id: reproduction-url
+    attributes:
+      label: Minimal reproduction URL
+      description: Link a runnable repository, StackBlitz, CodeSandbox, or other minimal public reproduction.
+      placeholder: https://github.com/your-org/reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest sequence needed to observe the defect in the reproduction.
+      placeholder: |
+        1. Configure ...
+        2. Call ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Reproduction frequency
+      options:
+        - Every time
+        - Often
+        - Sometimes
+        - Only once
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Exact versions and platform
+      description: Do not use `latest`; include resolved versions from your lockfile or `npm ls`.
+      placeholder: |
+        @ordercloud/react-sdk:
+        react / react-dom:
+        @tanstack/react-query:
+        ordercloud-javascript-sdk:
+        Browser or runtime:
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove secrets, access tokens, and personal data before submitting.
+      render: shell
+    validations:
+      required: false

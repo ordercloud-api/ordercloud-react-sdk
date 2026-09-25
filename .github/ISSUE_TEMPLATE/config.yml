@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: OrderCloud documentation
+    url: https://ordercloud.io/knowledge-base/
+    about: Find OrderCloud platform documentation and implementation guidance.

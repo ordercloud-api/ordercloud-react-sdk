@@ -12,5 +12,5 @@ export const queryClient = new QueryClient({
 });
 
 export const asyncStoragePersister: Persister = createAsyncStoragePersister({
-  storage: window.localStorage,
+  storage: typeof window !== "undefined" ? window.localStorage : undefined,
 });

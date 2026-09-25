@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, type JSX } from 'react'
 import { OpenAPIV3 } from 'openapi-types';
 import { useOrderCloudContext } from '.';
 import { sortBy, get } from 'lodash';
@@ -47,19 +47,16 @@ const useColumns = (resourceId: string, sortOrder?: string[], cellCallback?: (in
   }, [properties])
 
   const buildColumns = useCallback((obj: unknown, accessor?: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cols = [] as any
     if (!obj || !cellCallback) return cols;
     Object.entries(obj).forEach(([key, value]) => {
-      // eslint-disable-next-line no-prototype-builtins
-      const type = value.hasOwnProperty("allOf")
+      const type = Object.prototype.hasOwnProperty.call(value, "allOf")
         ? value["allOf"][0]["type"]
         : value["type"];
       const accessorString = accessor ? `${accessor}.${key}` : key;
   
       if (type === "object") {
-        // eslint-disable-next-line no-prototype-builtins
-        const properties = value.hasOwnProperty("allOf")
+        const properties = Object.prototype.hasOwnProperty.call(value, "allOf")
           ? value["allOf"][0]["properties"]
           : value["properties"];
         const nestedColumns = buildColumns(properties, accessorString);

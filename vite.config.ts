@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { name, version } from "./package.json";
@@ -18,18 +19,26 @@ export default defineConfig({
       external: [
         "react",
         "react-dom",
+        "axios",
         "ordercloud-javascript-sdk",
         "@tanstack/react-query",
         "@tanstack/react-table",
+        "react-hook-form",
+        "@hookform/resolvers",
+        "@hookform/resolvers/yup",
       ],
       output: {
         // Global vars to use in UMD build for externalized deps
         globals: {
           react: "React",
           "react-dom": "ReactDOM",
+          axios: "axios",
           "ordercloud-javascript-sdk": "ordercloud",
           "@tanstack/react-query": "ReactQuery",
           "@tanstack/react-table": "ReactTable",
+          "react-hook-form": "ReactHookForm",
+          "@hookform/resolvers": "HookFormResolvers",
+          "@hookform/resolvers/yup": "HookFormResolversYup",
         },
       },
     },
@@ -41,7 +50,13 @@ export default defineConfig({
     react(),
     dts({ rollupTypes: true }),
     nodePolyfills({
-      include: ["util", "querystring", "http", "https"],
+      include: ["util", "querystring", "http", "https", "path"],
     }),
   ],
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    clearMocks: true,
+    restoreMocks: true,
+  },
 });

@@ -29,16 +29,22 @@ export default function useAuthMutation<
   > = useMemo(() => {
     return {
       enabled: isAuthenticated && !disabled,
-      onError: (error: TError) => {
-        const e = error as OrderCloudError;
-        return options.onError
-        ? options.onError
-        : defaultErrorHandler
-        ? defaultErrorHandler(e, {isAuthenticated, ...rest})
-        : undefined
-      }
+      onError: (
+        error: TError,
+        variables: TVariables,
+        context: TContext | undefined,
+        mutationContext
+      ) => {
+        if (options.onError) {
+          return options.onError(error, variables, context, mutationContext);
+        }
+        if (defaultErrorHandler) {
+          const e = error as OrderCloudError;
+          return defaultErrorHandler(e, { isAuthenticated, ...rest });
+        }
+      },
     };
-  }, [isAuthenticated, disabled, options.onError, defaultErrorHandler, rest]);
+  }, [isAuthenticated, disabled, options, defaultErrorHandler, rest]);
 
   return useMutation({ ...restOptions, ...authMutationOptions });
 }

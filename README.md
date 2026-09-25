@@ -2,13 +2,21 @@
 This is a developer library for OrderCloud developers utilizing React for their frontend development. It is essentially a wrapper for Tanstack query, which provides a lot of good functionality out of the box for background refreshes, request de-duplication, and caching. You configure your API client settings on the `OrderCloudProvider` which will provide you with a global context accessible though the `useOrderCloudContext()` hook. In addition to this context hook, it provides "authenticated" versions of `useQuery` and `useMutation` for reading and manipulating OrderCloud data in an efficient manner.
 
 # Peer Dependencies
-To keep this package small, there are some required peer dependencies that are typical of an OrderCloud React application that utilizies tanstack libraries:
+To keep this package small, there are some required peer dependencies that are typical of an OrderCloud React application that utilizes tanstack libraries:
 
-- @tanstack/react-query@^5.20.1
-- @tanstack/react-table@^8.11.8
-- ordercloud-javascript-sdk@^5.3.0
-- react@^18.2.0
-- react-dom@^18.2.0
+| Package | Supported versions |
+| --- | --- |
+| `@tanstack/react-query` | `^5.62.2` |
+| `@tanstack/react-table` | `^8.20.5` |
+| `ordercloud-javascript-sdk` | `^11.1.0 \|\| ^12.0.0` |
+| `react` | `^18.3.1 \|\| ^19.0.0` |
+| `react-dom` | `^18.3.1 \|\| ^19.0.0` |
+| `react-hook-form` | `^7.53.2` |
+| `@hookform/resolvers` | `^3.3.4 \|\| ^5.7.1` |
+
+Install matching major versions of `react` and `react-dom` (both 18.3.1+ or both 19). This SDK supports React 18.3.1 and React 19; it is not React 19-only.
+
+React 19 no longer ships a UMD browser build. The SDK still emits UMD/ESM artifacts, but script-tag consumers on React 19 must provide React through an ESM-capable CDN or bundler rather than a React UMD global.
 
 # Usage
 
@@ -105,7 +113,7 @@ This hook supports all of the normal `UseQueryOptions` documented by Tanstack. I
 Here is an example of using the `useAuthQuery` hook to create a hook that returns the current user. 
 ```tsx
 import { Me, MeUser, OrderCloudError, RequiredDeep } from "ordercloud-javascript-sdk";
-import { useAuthQuery } from "@rwatt451/ordercloud-react";
+import { useAuthQuery } from "@ordercloud/react-sdk";
 import { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 
 export function useCurrentUser():UseQueryResult<RequiredDeep<MeUser>, OrderCloudError> {
@@ -128,7 +136,7 @@ This hook supports all of the normal `UseMutationOptions` documented by Tanstack
 Here is an example of using the `useAuthMutation` hook to create a `UseMutationResult` for modifying the current user. 
 ```tsx
 import { Me, MeUser, OrderCloudError, RequiredDeep } from "ordercloud-javascript-sdk";
-import { queryClient, useAuthMutation } from "@rwatt451/ordercloud-react";
+import { queryClient, useAuthMutation } from "@ordercloud/react-sdk";
 import { UseMutationResult } from "@tanstack/react-query";
 
 export function useMutateCurrentUser():UseMutationResult<RequiredDeep<MeUser>, unknown, Partial<MeUser>, unknown> {
@@ -163,7 +171,7 @@ An **optional** `UseQueryOptions` object.  It is recommended to use a `staleTime
 ### Usage
 Here is an example of using the `useOcResourceList` hook to create a `UseQueryResult` for modifying the current user. 
 ```tsx
-import { useOcResourceList } from "@rwatt451/ordercloud-react";
+import { useOcResourceList } from "@ordercloud/react-sdk";
 
   const dataQuery = useOcResourceList('Orders', { IsSubmitted: true }, { direction: 'Incoming' }, {
     staleTime: 300000, // 5 min
@@ -187,7 +195,7 @@ An **optional** `UseQueryOptions` object.  It is recommended to use a `staleTime
 ### Usage
 Here is an example of using the `useOcResourceGet` hook to create a `UseQueryResult` for modifying the current user. 
 ```tsx
-import { useOcResourceGet } from "@rwatt451/ordercloud-react";
+import { useOcResourceGet } from "@ordercloud/react-sdk";
 
   const dataQuery = useOcResourceGet('Catalogs', { buyerID: 'BuyerA' }, {
     staleTime: 'Infinity',
@@ -214,7 +222,7 @@ An **optional** boolean that indicates if an item is new.  If new, the Create op
 ### Usage
 Here is an example of using the `useMutateOcResource` hook to create a `UseMutationResult` for modifying the current user. 
 ```tsx
-import { useMutateOcResource } from "@rwatt451/ordercloud-react";
+import { useMutateOcResource } from "@ordercloud/react-sdk";
 import { useCallback } from "react";
 
   const { mutateAsync: saveAsync } = useMutateOcResource('Products')
@@ -244,7 +252,7 @@ An **optional** `UseMutationOptions` object.
 ### Usage
 Here is an example of using the `useDeleteOcResource` hook to create a `UseMutationResult` for modifying the current user. 
 ```tsx
-import { useDeleteOcResource } from "@rwatt451/ordercloud-react";
+import { useDeleteOcResource } from "@ordercloud/react-sdk";
 import { useCallback } from "react";
 
   const { mutateAsync: deleteAsync } = useDeleteOcResource('Orders', { direction: 'Outgoing' })
@@ -280,7 +288,7 @@ An **optional** `UseQueryOptions` object.  It is recommended to use a `staleTime
 ### Usage
 Here is an example of using the `useListAssignments` hook to create a `UseQueryResult` for modifying the current user. 
 ```tsx
-import { useOcResourceList } from "@rwatt451/ordercloud-react";
+import { useOcResourceList } from "@ordercloud/react-sdk";
 
   const dataQuery = useListAssignments('Catalogs', { ID: '100|101|102' }, {
     staleTime: 300000, // 5 min
@@ -307,7 +315,7 @@ An **optional** `UseMutationOptions` object.
 ### Usage
 Here is an example of using the `useMutateAssignment` hook to create a `UseMutationResult` for modifying the current user. 
 ```tsx
-import { useMutateAssignment } from "@rwatt451/ordercloud-react";
+import { useMutateAssignment } from "@ordercloud/react-sdk";
 import { useCallback } from "react";
 
   const { mutateAsync: saveAssignmentAsync } = useMutateAssignment('Categories', { catalogID: 'DefaultCatalog', categoryID: 'SoftGoods' })
@@ -340,7 +348,7 @@ An **optional** `UseMutationOptions` object.
 ### Usage
 Here is an example of using the `useDeleteAssignment` hook to create a `UseMutationResult` for modifying the current user. 
 ```tsx
-import { useDeleteAssignment } from "@rwatt451/ordercloud-react";
+import { useDeleteAssignment } from "@ordercloud/react-sdk";
 import { useCallback } from "react";
 
   const { mutateAsync: deleteAsync } = useDeleteAssignment('Categories', { catalogID: 'DefaultCatalog', categoryID: 'SoftGoods' })

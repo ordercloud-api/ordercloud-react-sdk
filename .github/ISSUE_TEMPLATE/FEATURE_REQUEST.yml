@@ -1,0 +1,52 @@
+name: Feature Request
+description: Suggest an improvement to the OrderCloud React SDK.
+title: "[Request]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requests are evaluated on the user problem and a concrete SDK contract, not the implementation alone.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case, who it affects, and current limitations.
+      placeholder: I need to ... because ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed SDK contract
+      description: Show the API, hook, component, types, or behavior consumers would use.
+      placeholder: |
+        ```ts
+        const result = useExample({ ... })
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Describe the current workaround and why it is insufficient, or state that none exists.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that would make this request complete.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include examples, mockups, related issues, or relevant OrderCloud workflows.
+    validations:
+      required: false

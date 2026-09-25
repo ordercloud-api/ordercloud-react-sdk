@@ -180,15 +180,15 @@ function ShapeArrayProp(propName: string, target: any) {
 function ShapeObjectProp(target: any) {
   let propShape
   if (target.allOf?.length) {
-    let childSchemaShape = {}
-    target.allOf.forEach((p: any) => {
-      const childPropertyInfo = p.properties
-      childSchemaShape = generateFormSchema(childPropertyInfo)
-    })
+    const childSchemaShape = generateFormSchema(
+      target.allOf[target.allOf.length - 1].properties
+    )
     propShape = yup.object(childSchemaShape)
   } else if (target.properties) {
-    let childSchemaShape = {}
-    childSchemaShape = generateFormSchema(target.properties, target?.required)
+    const childSchemaShape = generateFormSchema(
+      target.properties,
+      target?.required
+    )
     propShape = yup.object(childSchemaShape)
   }
   return propShape

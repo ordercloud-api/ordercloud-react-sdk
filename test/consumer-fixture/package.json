@@ -1,0 +1,8 @@
+{
+  "name": "ordercloud-react-sdk-consumer-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  }
+}
