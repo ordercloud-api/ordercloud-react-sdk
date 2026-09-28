@@ -1,3 +1,10 @@
+## 1.0.0
+
+### Breaking
+
+- replace `react-hook-form` with `@tanstack/react-form` in `useOcForm`. The hook now returns `{ form, resourceSchema, parseValues }` instead of `{ methods, resourceSchema }`.
+- generate form validation with Zod instead of Yup, and remove the `react-hook-form` and `@hookform/resolvers` peer dependencies.
+
 ## 0.3.0 (2025-08-04)
 
 ### Feat

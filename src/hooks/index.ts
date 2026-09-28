@@ -13,6 +13,7 @@ import {
   useDeleteAssignment,
 } from "./useOcResource";
 import { useOcForm } from "./useOcForm";
+export type { OcFormValues, OcFormValidationTrigger, UseOcFormOptions } from "./useOcForm";
 import useHasAccess from "./useHasAccess";
 import { usePromoExpressions } from "./usePromoExpressions";
 import useShopper from "./useShopper";

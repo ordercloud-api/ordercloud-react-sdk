@@ -4,11 +4,15 @@ This is a developer library for OrderCloud developers utilizing React for their 
 # Peer Dependencies
 To keep this package small, there are some required peer dependencies that are typical of an OrderCloud React application that utilizies tanstack libraries:
 
-- @tanstack/react-query@^5.20.1
-- @tanstack/react-table@^8.11.8
-- ordercloud-javascript-sdk@^5.3.0
-- react@^18.2.0
-- react-dom@^18.2.0
+| Package | Supported versions |
+| --- | --- |
+| `@tanstack/react-form` | `^1.33.5` |
+| `@tanstack/react-query` | `^5.62.2` |
+| `@tanstack/react-table` | `^8.20.5` |
+| `axios` | `^1.1.3` |
+| `ordercloud-javascript-sdk` | `^11.1.0` |
+| `react` | `^18.3.1` |
+| `react-dom` | `^18.3.1` |
 
 # Usage
 
@@ -368,7 +372,60 @@ An **optional** list that will be used to sort table header order if provided.
 An **optional** callback for defining custom elements for `@tanstack/react-table` table cells by data type.
 
 ## `useOcForm()` hook
-This hook returns a `UseFormReturn` methods object and a "shallowed" resource schema. If a resource's xp schema is included in the `xpSchemas` option for `OrderCloudProvider`, these properties will be included in the form fields. 
+This hook returns a TanStack Form instance, a shallow OpenAPI resource schema, and `parseValues`. If a resource's xp schema is included in the `xpSchemas` option for `OrderCloudProvider`, these properties will be included in the form fields.
+
+Form values are always `{ parameters, body }`. `parameters` holds operation parameters such as IDs. `body` holds the resource fields the user edits. `resourceSchema` describes those fields so a screen can render inputs. The hook does not save to OrderCloud. After validation, send `parseValues()` to the OrderCloud SDK. `parseValues()` omits empty numbers, null booleans, mismatched optional values, and read-only fields. A number the merchant entered still has to meet the spec minimum, and an integer field has to be a whole number. TanStack Form keeps the raw field state.
+
+```tsx
+const { form, parseValues } = useOcForm("Products", {
+  parameters: { productID: product?.ID },
+  body: product,
+}, undefined, undefined, {
+  onSubmit: async () => {
+    const values = parseValues()
+    await Products.Save(String(values.parameters.productID), values.body)
+  },
+})
+
+return (
+  <form
+    onSubmit={(event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void form.handleSubmit()
+    }}
+  >
+    <form.Field name="body.Name">
+      {(field) => (
+        <>
+          <input
+            value={field.state.value ?? ""}
+            onBlur={field.handleBlur}
+            onChange={(event) => field.handleChange(event.target.value)}
+          />
+          {field.state.meta.errors.length > 0 && (
+            <p>{field.state.meta.errors.map((error) => error?.message ?? String(error)).join(", ")}</p>
+          )}
+        </>
+      )}
+    </form.Field>
+    <button type="submit">Save product</button>
+  </form>
+)
+```
+
+### Migrating from React Hook Form
+
+`useOcForm` previously returned React Hook Form's `methods` object. Replace each call site:
+
+- `methods.register("body.Name")` / `Controller` becomes `form.Field` with `name="body.Name"`, `field.state.value`, `field.handleChange`, and `field.handleBlur`.
+- `methods.formState.errors.body?.Name?.message` becomes `field.state.meta.errors`.
+- `methods.getValues("body.Name")` becomes `form.getFieldValue("body.Name")`.
+- `methods.watch` becomes `form.Subscribe`.
+- `methods.handleSubmit(onValid)` becomes `form.handleSubmit()`. Save `parseValues()` instead of the raw submit value.
+- `methods.reset(next)` becomes `form.reset(next)`.
+- `useFieldArray({ name })` becomes `form.Field` with `mode="array"` (`pushValue`, `removeValue`, and the other array helpers).
+- Validation still defaults to `onBlur`.
 
 ### Options
 
@@ -376,10 +433,16 @@ This hook returns a `UseFormReturn` methods object and a "shallowed" resource sc
 The OrderCloud resource name used for generating column information.
 
 #### **initialValues**: `{ parameters?: {[key: string]: unknown}, body?: {[key: string]: unknown} }`
-An **optional** object that contains initial parameter and body values for an item of a given resource ID.  The absence of body values indicates a new item.
+An **optional** object that contains initial parameter and body values for an item of a given resource ID. The absence of body values indicates a new item. When this object later changes (for example, after a resource request resolves), the form resets to those values.
 
-#### **props**: `UseFormProps`
-An **optional** `react-hook-form` `useForm` props object 
+#### **isAssignment**: `boolean`
+An **optional** flag. When true, the hook validates the assignment save operation instead of create or save.
+
+#### **operationInclusion**: `string`
+An **optional** operation-name suffix used to select an assignment operation.
+
+#### **options**: `{ validationTrigger?: "onBlur" | "onChange" | "onSubmit", onSubmit?: (values) => void, formOptions?: object }`
+An **optional** settings object. `validationTrigger` defaults to `onBlur`. Submit validation still runs when the trigger is `onBlur` or `onChange`. `onSubmit` is forwarded to TanStack Form. `formOptions` accepts extra TanStack Form `useForm` options, except `defaultValues` and `validators`, which this hook owns. 
 
 ## `useHasAccess()` hook
 This hook determines whether a user has read or admin access to an OrderCloud resource by comparing the user's token and application scope to the OAuth roles indicated on the OpenAPI spec.

@@ -1,7 +1,7 @@
-import * as yup from 'yup'
 import { isNil, isNull, last } from 'lodash'
 import _ from 'lodash'
 import Case from 'case'
+import { z, ZodTypeAny } from 'zod'
 
 //massages the operation.parameters into a schema object that
 //can be used by `generateFormSchema` and RequestObject.
@@ -50,148 +50,186 @@ function getPropertyLabel(property: string) {
 }
 
 export function generateFormSchema(schemaProps: any, requiredProps?: string[]) {
-  const schemaShape = {} as any
-  const schemaKeys = Object.keys(schemaProps)
-  schemaKeys.forEach((propName) => {
-    const target = schemaProps[propName]
-    //Do not add readOnly fields to form schema
-    if (target?.readOnly) {
-      return
-    }
-    switch (target?.type) {
-      case 'string':
-        schemaShape[propName] = ShapeStringProp(propName, target)
-        break
-      case 'number':
-        schemaShape[propName] = ShapeNumberProp(target)
-        break
-      case 'integer':
-        schemaShape[propName] = ShapeNumberProp(target)
-        break
-      case 'boolean':
-        schemaShape[propName] = yup.boolean()
-        break
-      case 'object':
-        schemaShape[propName] = ShapeObjectProp(target)
-        break
-      case 'array':
-        schemaShape[propName] = ShapeArrayProp(propName, target)
-        break
-      default:
-        schemaShape[propName] = yup.string()
-        break
-    }
-    if (schemaShape[propName]) {
-      schemaShape[propName] =
-        (requiredProps && requiredProps.includes(propName)) || target.required
-          ? schemaShape[propName].required(`${getPropertyLabel(propName)} is required`)
-          : target?.type === 'object'
-            ? schemaShape[propName].notRequired().default(undefined)
-            : schemaShape[propName].nullable(true)
-      if (!SKIP_TRANSFORM_FORMATS.includes(target?.format)) {
-        schemaShape[propName] = schemaShape[propName].transform(
-          typeSpecificTransform(target?.type, propName)
-        )
-      }
+  const shape: Record<string, ZodTypeAny> = {}
+  Object.keys(schemaProps ?? {}).forEach((propName) => {
+    const field = buildFieldSchema(propName, schemaProps[propName], requiredProps)
+    if (field) {
+      shape[propName] = field
     }
   })
-
-  return schemaShape
+  return z.object(shape).transform((value) =>
+    Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
+  )
 }
 
-function hasValueOfType(type: string, val: any, propName: string) {
+function hasValueOfType(type: string | undefined, val: any, propName: string) {
   switch (type) {
     case 'string':
-      return Boolean(val.length || val === '')
+      return typeof val === 'string'
     case 'number':
     case 'integer':
-      return Number(val) === val
+      return typeof val === 'number' && !Number.isNaN(val)
     case 'boolean':
       return typeof val === 'boolean'
     case 'object':
+      if (val == null || typeof val !== 'object' || Array.isArray(val)) return false
       return propName === 'xp'
-        ? typeof val === 'object'
-        : Boolean(Object.values(val).filter((v) => !isNil(v)).length)
+        ? true
+        : Object.values(val).some((entry) => !isNil(entry))
     case 'array':
       return Array.isArray(val)
     default:
-      return false
+      return typeof val === 'string'
   }
 }
 
-function typeSpecificTransform(type: string, propName: string) {
-  return (_: any, val: any) => (val === null || hasValueOfType(type, val, propName) ? val : undefined)
+function coerceValue(type: string | undefined, propName: string, value: unknown) {
+  // OrderCloud rejects null for numbers and booleans, and rejects 0 when minimum is 1.
+  // Empty inputs are omitted so a field the merchant never touched is not submitted.
+  if (type === 'number' || type === 'integer') {
+    if (typeof value === 'number' && !Number.isNaN(value)) return value
+    return undefined
+  }
+  if (type === 'boolean') {
+    return typeof value === 'boolean' ? value : undefined
+  }
+  if (value === null || hasValueOfType(type, value, propName)) return value
+  return undefined
 }
 
-function ShapeStringProp(propName: string, target: any) {
-  let propShape
-  propShape = yup.string()
-  if (propName?.toLocaleLowerCase() === 'email') {
-    propShape = propShape.email('Email is invalid')
-  }
+function castDateTime(value: unknown) {
+  if (value == null || typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return value
+}
 
-  if (target.maxLength) {
+function isMissingRequired(type: string | undefined, value: unknown) {
+  if (type === 'number' || type === 'integer') return value == null
+  if (value == null) return true
+  if ((type == null || type === 'string') && value === '') return true
+  return false
+}
+
+function buildFieldSchema(propName: string, target: any, requiredProps?: string[]) {
+  if (target?.readOnly) return
+  const isRequired = Boolean(
+    (requiredProps && requiredProps.includes(propName)) || target?.required
+  )
+  const label = getPropertyLabel(propName) ?? propName
+  const base = baseSchema(propName, target, label)
+  if (!base) return
+  return applyPresence(base, {
+    type: target?.type,
+    propName,
+    format: target?.format,
+    isRequired,
+    label,
+  })
+}
+
+function baseSchema(propName: string, target: any, label: string): ZodTypeAny | undefined {
+  switch (target?.type) {
+    case 'string':
+      return shapeString(propName, target, label)
+    case 'number':
+    case 'integer':
+      return shapeNumber(target, label)
+    case 'boolean':
+      return z.boolean({
+        required_error: `${label} is required`,
+        invalid_type_error: `${label} is required`,
+      })
+    case 'object':
+      return shapeObject(target)
+    case 'array':
+      return z.array(
+        buildFieldSchema(propName, target.items ?? { type: 'string' }) ?? z.string()
+      )
+    default:
+      return shapeString(propName, target ?? {}, label)
+  }
+}
+
+function applyPresence(
+  base: ZodTypeAny,
+  opts: {
+    type?: string
+    propName: string
+    format?: string
+    isRequired: boolean
+    label: string
+  }
+) {
+  const skipTransform = SKIP_TRANSFORM_FORMATS.includes(opts.format ?? '')
+  const coerce = (value: unknown) =>
+    skipTransform ? castDateTime(value) : coerceValue(opts.type, opts.propName, value)
+
+  return z
+    .any()
+    .superRefine((value, ctx) => {
+      const coerced = coerce(value)
+      if (opts.isRequired && isMissingRequired(opts.type, coerced)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${opts.label} is required`,
+        })
+        return
+      }
+      if (coerced == null) return
+      const parsed = base.safeParse(coerced)
+      if (!parsed.success) {
+        parsed.error.issues.forEach((issue) => ctx.addIssue(issue))
+      }
+    })
+    .transform((value) => {
+      const coerced = coerce(value)
+      if (coerced == null) return coerced
+      const parsed = base.safeParse(coerced)
+      return parsed.success ? parsed.data : coerced
+    })
+}
+
+function shapeString(propName: string, target: any, label: string) {
+  let propShape = z.string({
+    required_error: `${label} is required`,
+    invalid_type_error: `${label} is required`,
+  })
+  if (target?.maxLength != null) {
     propShape = propShape.max(
       target.maxLength,
       `${propName} must not exceed ${target.maxLength} characters`
     )
   }
-
-  return propShape
-}
-
-function ShapeNumberProp(target: any) {
- const propShape = yup
-    .number()
-    .transform((value) => (isNaN(value) || value === null || value === undefined ? 0 : value))
-
-  if (target.minimum) propShape.min(target.minimum).default(target.minimum)
-  return propShape
-}
-
-function ShapeArrayProp(propName: string, target: any) {
-  let itemShape: any
-  switch (target.items.type) {
-    case 'string':
-      itemShape = ShapeStringProp(propName, target.items)
-      break
-    case 'number':
-      itemShape = ShapeNumberProp(target.items)
-      break
-    case 'integer':
-      itemShape = ShapeNumberProp(target.items)
-      break
-    case 'boolean':
-      itemShape = yup.boolean()
-      break
-    case 'object':
-      itemShape = ShapeObjectProp(target.items)
-      break
-    case 'array':
-      itemShape = ShapeArrayProp(propName, target.items)
-      break
-    default:
-      itemShape = yup.string()
-      break
+  if (propName?.toLocaleLowerCase() === 'email') {
+    return propShape.refine(
+      (value) => value === '' || z.string().email().safeParse(value).success,
+      'Email is invalid'
+    )
   }
-  return yup.array(itemShape)
+  return propShape
 }
 
-function ShapeObjectProp(target: any) {
-  let propShape
+function shapeNumber(target: any, label: string) {
+  let propShape = z.number({
+    required_error: `${label} is required`,
+    invalid_type_error: `${label} is required`,
+  })
+  if (target?.type === 'integer') {
+    propShape = propShape.int(`${label} must be a whole number`)
+  }
+  if (target?.minimum != null) {
+    propShape = propShape.min(target.minimum, `${label} must be at least ${target.minimum}`)
+  }
+  return propShape
+}
+
+function shapeObject(target: any) {
   if (target.allOf?.length) {
-    let childSchemaShape = {}
-    target.allOf.forEach((p: any) => {
-      const childPropertyInfo = p.properties
-      childSchemaShape = generateFormSchema(childPropertyInfo)
-    })
-    propShape = yup.object(childSchemaShape)
-  } else if (target.properties) {
-    let childSchemaShape = {}
-    childSchemaShape = generateFormSchema(target.properties, target?.required)
-    propShape = yup.object(childSchemaShape)
+    return generateFormSchema(target.allOf[target.allOf.length - 1].properties)
   }
-  return propShape
+  if (target.properties) {
+    return generateFormSchema(target.properties, target?.required)
+  }
 }
 
 export function shallowNestedProperties(obj: any) {
