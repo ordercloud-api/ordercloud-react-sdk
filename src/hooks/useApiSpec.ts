@@ -122,33 +122,69 @@ const buildOperations = (spec?: OpenAPIV3.Document) => {
   return [...defaultOperations, ...additionalOperations] as IOrderCloudOperationObject[]
 }
 
-const useApiSpec = () => {
-  const { baseApiUrl } = useOrderCloudContext();
-  const [spec, setSpec] = useState<OpenAPIV3.Document | undefined>(() => {
-    try {
-      // Get from local storage by key
-      const item = window.localStorage.getItem(`${localStoragePrefix}${baseApiUrl}`)
-      // Parse stored json or if none return initialValue
-      return item ? JSON.parse(item) : undefined
-    } catch (error) {
-      // If error also return initialValue
-      console.log(error)
-      return undefined
-    }
-  })
+const specCache = new Map<string, OpenAPIV3.Document>()
+const specListeners = new Map<string, Set<(spec: OpenAPIV3.Document) => void>>()
+const specRequests = new Map<string, Promise<OpenAPIV3.Document>>()
 
-  const retrieveSpec = useCallback(async (url: string) => {
+function readStoredSpec(url: string) {
+  const cached = specCache.get(url)
+  if (cached) return cached
+  try {
+    const item = window.localStorage?.getItem(`${localStoragePrefix}${url}`)
+    if (!item) return undefined
+    const parsed = JSON.parse(item) as OpenAPIV3.Document
+    specCache.set(url, parsed)
+    return parsed
+  } catch (error) {
+    console.log(error)
+    return undefined
+  }
+}
+
+function publishSpec(url: string, spec: OpenAPIV3.Document) {
+  specCache.set(url, spec)
+  specListeners.get(url)?.forEach((listener) => listener(spec))
+}
+
+function loadSpec(url: string, force = false) {
+  if (!force) {
+    const cached = specCache.get(url)
+    if (cached) return Promise.resolve(cached)
+    const inFlight = specRequests.get(url)
+    if (inFlight) return inFlight
+  }
+
+  const request = (async () => {
     const result = await SwaggerParser.dereference(`${url}/v1/openapi/v3`)
     const v3doc = result as OpenAPIV3.Document
     if (v3doc.servers) {
       v3doc.servers[0].url = `${url}/v1`
     }
-        // Clear out swagger specs in localStorage to prevent capacity errors
+    try {
+      if (window.localStorage) {
         const keys = Object.keys(window.localStorage)
-        keys.filter((k) => k.includes('OcOpenApi')).map((i) => window.localStorage.removeItem(i))
+        keys.filter((key) => key.includes('OcOpenApi')).forEach((key) => window.localStorage.removeItem(key))
         window.localStorage.setItem(`${localStoragePrefix}${url}`, JSON.stringify(v3doc))
-    setSpec(v3doc)
-  }, [])
+      }
+    } catch (error) {
+      // A dereferenced spec can be too large or cyclic for localStorage. Callers still share the in-memory copy.
+      console.log(error)
+    }
+    publishSpec(url, v3doc)
+    return v3doc
+  })()
+
+  specRequests.set(url, request)
+  return request
+}
+
+const useApiSpec = () => {
+  const { baseApiUrl } = useOrderCloudContext();
+  const [spec, setSpec] = useState<OpenAPIV3.Document | undefined>(() =>
+    baseApiUrl ? readStoredSpec(baseApiUrl) : undefined
+  )
+
+  const retrieveSpec = useCallback(async (url: string) => loadSpec(url, true), [])
 
  const specEnv = useQuery({
       queryKey: ['env'],
@@ -185,16 +221,18 @@ const useApiSpec = () => {
 
   useEffect(() => {
     if (!baseApiUrl) return
-    try {
-      // Get from local storage by key
-      const item = window.localStorage.getItem(`${localStoragePrefix}${baseApiUrl}`)
-      // Parse stored json or if none return initialValue
-      item ? setSpec(JSON.parse(item)) : retrieveSpec(baseApiUrl)
-    } catch (error) {
-      // If error also return initialValue
-      retrieveSpec(baseApiUrl)
+    const stored = readStoredSpec(baseApiUrl)
+    if (stored) setSpec(stored)
+
+    const listeners = specListeners.get(baseApiUrl) ?? new Set<(spec: OpenAPIV3.Document) => void>()
+    listeners.add(setSpec)
+    specListeners.set(baseApiUrl, listeners)
+    if (!stored) void loadSpec(baseApiUrl)
+
+    return () => {
+      listeners.delete(setSpec)
     }
-  }, [baseApiUrl, retrieveSpec])
+  }, [baseApiUrl])
 
   const result = useMemo(() => {
     const operations = buildOperations(spec)
