@@ -1,35 +1,71 @@
 import useOperations from './useOperations'
-import { useCallback, useMemo } from 'react'
-import * as yup from 'yup'
-import { yupResolver } from '@hookform/resolvers/yup'
-import { UseFormProps, useForm } from 'react-hook-form'
-import _, { cloneDeep } from 'lodash'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { isEqual } from 'lodash'
+import { cloneDeep } from 'lodash'
+import { z } from 'zod'
+import { useForm, FormOptions } from '@tanstack/react-form'
 import { generateFormSchema, generateParameterSchema, shallowNestedProperties, shapeXpSchema } from '../formSchemaGenerator.utils'
 import { useOrderCloudContext } from '.'
 import { OpenAPIV3 } from 'openapi-types'
 
-// For specific fields/values we do not want to take the example from Open API spec
-const normalizeExampleValue = (val: any) => {
-  switch (typeof val) {
-    case 'string':
-      if (val === '2018-01-01T00:00:00-06:00') {
-        return null
-      }
-      break
-    case 'object':
-      if (Array.isArray(val)) {
-        return val.join('').length ? val : []
-      }
-      break
-    default:
-      return val
-  }
-  return val
+export type OcFormValues = {
+  parameters: Record<string, unknown>
+  body: Record<string, unknown>
 }
 
-const getExampleValue = (row: any, key: string) => {
-  key.split('.').forEach((k) => (row ? (row = row[k]) : undefined))
-  return row
+export type OcFormValidationTrigger = 'onBlur' | 'onChange' | 'onSubmit'
+
+export type UseOcFormOptions = {
+  /** When generated validation runs. Defaults to onBlur. Submit always validates. */
+  validationTrigger?: OcFormValidationTrigger
+  /** Called by form.handleSubmit after validation. Save parseValues(), not the raw form state. */
+  onSubmit?: (values: OcFormValues) => void | Promise<void>
+  /** Extra TanStack Form options. defaultValues and validators stay owned by this hook. */
+  formOptions?: Partial<
+    Omit<
+      FormOptions<
+        OcFormValues,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any,
+        any
+      >,
+      'defaultValues' | 'validators'
+    >
+  >
+}
+
+const fallbackFormSchema = z.object({
+  parameters: z.record(z.any()),
+  body: z.record(z.any()),
+})
+
+function validatorsFor(schema: z.ZodTypeAny, trigger: OcFormValidationTrigger) {
+  const validators: {
+    onSubmit: z.ZodTypeAny
+    onBlur?: z.ZodTypeAny
+    onChange?: z.ZodTypeAny
+  } = { onSubmit: schema }
+  if (trigger === 'onBlur') validators.onBlur = schema
+  if (trigger === 'onChange') validators.onChange = schema
+  return validators
+}
+
+function toFormValues(initialValues?: {
+  parameters?: Record<string, unknown>
+  body?: Record<string, unknown>
+}): OcFormValues {
+  return {
+    parameters: { ...(initialValues?.parameters ?? {}) },
+    body: { ...(initialValues?.body ?? {}) },
+  }
 }
 
 export const useOcForm = (
@@ -37,7 +73,7 @@ export const useOcForm = (
   initialValues?: { parameters?: {[key: string]: unknown}, body?: {[key: string]: unknown} },
   isAssignment?: boolean,
   operationInclusion?: string,
-  props?: UseFormProps,
+  options?: UseOcFormOptions,
 ) => {
   const { saveOperation, createOperation, assignmentSaveOperation } = useOperations(resource, operationInclusion) as any
   const { xpSchemas } = useOrderCloudContext()
@@ -92,58 +128,46 @@ export const useOcForm = (
     return shallowNestedProperties(nativeProperties)
   }, [requestSchema?.required, requestSchema?.allOf, xpSchema, xpSchemas?.properties, resource])
 
-  const getDefaultSchemaValues = useCallback(
-    (schema: OpenAPIV3.SchemaObject, parentPath?: string) => {
-      const obj = {} as {[key: string]: unknown}
-      Object.entries(schema).forEach(([key, value]: [string, OpenAPIV3.SchemaObject]) => {
-        if (value.readOnly) return
-        if (value?.properties) {
-          obj[key] = getDefaultSchemaValues(value.properties, key)
-          return
-        }
-        const path = parentPath ? `${parentPath}.${key}` : key
-        obj[key] = normalizeExampleValue(getExampleValue(requestSchema?.allOf[0].example, path))
-      })
-      return obj
-    },
-    [requestSchema?.allOf]
-  )
-
-  // Generate the form schema using Yup
   const formSchema = useMemo(() => {
-    if (!resourceSchema) return
-    const generatedSchema = generateFormSchema(resourceSchema, requestSchema?.required)
-
-    let generatedParamSchema = {}
-
-    if (operationParameters) {
-      generatedParamSchema = generateFormSchema(operationParameters?.schema, operationParameters?.required)
-    }
-
-    return yup.object().shape({
-      parameters: yup.object(generatedParamSchema),
-      body: yup.object(generatedSchema),
+    if (!resourceSchema) return fallbackFormSchema
+    const bodySchema = generateFormSchema(resourceSchema, requestSchema?.required)
+    const parameterSchema = operationParameters
+      ? generateFormSchema(operationParameters.schema, operationParameters.required)
+      : z.object({})
+    return z.object({
+      parameters: parameterSchema,
+      body: bodySchema,
     })
   }, [resourceSchema, requestSchema?.required, operationParameters])
 
-  // Initiate the react-hook-form
-  const methods = useForm({
-    defaultValues:  props?.defaultValues || {} as any,
-    values: {
-      parameters: {
-        ...initialValues?.parameters,
-      },
-      body: {
-        ...initialValues?.body || {},
-      },
+  const validationTrigger = options?.validationTrigger ?? 'onBlur'
+  const nextValues = useMemo(() => toFormValues(initialValues), [initialValues])
+  const seenValues = useRef(nextValues)
+
+  const form = useForm({
+    ...options?.formOptions,
+    defaultValues: nextValues,
+    validators: validatorsFor(formSchema, validationTrigger),
+    onSubmit: async ({ value }) => {
+      await options?.onSubmit?.(value)
     },
-    resolver: yupResolver(formSchema!),
-    mode: props?.mode || 'onBlur',
-    ...props
   })
 
+  // useForm syncs validators through form.update on each render. Reset is separate:
+  // that update leaves a touched form in place, and this hook keeps values controlled.
+  useEffect(() => {
+    if (isEqual(seenValues.current, nextValues)) return
+    seenValues.current = nextValues
+    form.reset(nextValues)
+  }, [form, nextValues])
+
+  const parseValues = useCallback((values?: OcFormValues) => {
+    return formSchema.parse(values ?? form.state.values) as OcFormValues
+  }, [form, formSchema])
+
   return {
-    methods,
-    resourceSchema
+    form,
+    resourceSchema,
+    parseValues,
   }
-  };
+}
