@@ -6,7 +6,7 @@ To keep this package small, there are some required peer dependencies that are t
 
 - @tanstack/react-query@^5.20.1
 - @tanstack/react-table@^8.11.8
-- ordercloud-javascript-sdk@^5.3.0
+- ordercloud-javascript-sdk@^14.0.0
 - react@^18.2.0
 - react-dom@^18.2.0
 

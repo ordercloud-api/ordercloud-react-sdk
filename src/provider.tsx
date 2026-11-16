@@ -3,6 +3,7 @@ import {
   Auth,
   Configuration,
   OrderCloudError,
+  SdkHttpRequest,
   Tokens,
 } from "ordercloud-javascript-sdk";
 import {
@@ -11,6 +12,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { OrderCloudContext } from "./context";
@@ -36,8 +38,10 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
   currencyDefaults = { currencyCode: "USD", language: "en-US" },
   defaultErrorHandler,
 }) => {
+  const verifyTokenRef = useRef<() => Promise<void>>();
+
   const ocConfig = useMemo(() => {
-    const { cookieOptions, ...rest } = configurationOverrides || {};
+    const { cookieOptions, onRequest, ...rest } = configurationOverrides || {};
     return {
       cookieOptions: {
         prefix: clientId,
@@ -46,6 +50,21 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
       baseApiUrl,
       clientID: clientId,
       ...rest,
+      // The SDK uses fetch, so its calls bypass the axios interceptor below.
+      // Token requests are skipped because verifyToken can request tokens itself.
+      onRequest: async (request: SdkHttpRequest) => {
+        if (verifyTokenRef.current && !request.url.endsWith("/oauth/token")) {
+          await verifyTokenRef.current();
+          request = {
+            ...request,
+            headers: {
+              ...request.headers,
+              Authorization: `Bearer ${Tokens.GetAccessToken()}`,
+            },
+          };
+        }
+        return onRequest ? onRequest(request) : request;
+      },
     };
   }, [baseApiUrl, clientId, configurationOverrides]);
 
@@ -93,7 +112,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
           password,
           clientId,
           scope,
-          customScope
+          { customRoles: customScope }
         );
         const { access_token, refresh_token } = response;
         Tokens.SetAccessToken(access_token);
@@ -270,7 +289,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
         const { access_token, refresh_token } = await Auth.Anonymous(
           clientId,
           scope,
-          customScope
+          { customRoles: customScope }
         );
 
         Tokens.SetAccessToken(access_token);
@@ -282,6 +301,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
       [allowAnonymous, clientId, scope, customScope, handleLogout]
     )
   );
+  verifyTokenRef.current = verifyToken;
 
   const newAnonSession = useCallback(async () => {
     const token = await Tokens.GetValidToken();
@@ -291,7 +311,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
         const { access_token, refresh_token } = await Auth.Anonymous(
           clientId,
           scope,
-          customScope
+          { customRoles: customScope }
         );
 
         Tokens.SetAccessToken(access_token);
